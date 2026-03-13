@@ -29,9 +29,13 @@ class AnswerResponse(BaseModel):
     end: int
 
 
-device: int | str = -1
+device: int | str = "cpu"
 if torch.backends.mps.is_available():
-    device = "mps"
+    try:
+        torch.mps.device_count()
+        device = "mps"
+    except Exception:
+        device = "cpu"
 
 tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased-distilled-squad")
 model = AutoModelForQuestionAnswering.from_pretrained(

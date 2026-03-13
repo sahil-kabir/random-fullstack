@@ -12,7 +12,6 @@ RUN apt-get update && apt-get install -y nginx && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/dist /var/www/html
 COPY main.py pyproject.toml uv.lock ./
-COPY --from=builder /app/node_modules/.vite /var/www/html/assets
 
 RUN pip install uv && uv sync
 
@@ -25,13 +24,20 @@ RUN echo 'server { \
     index index.html; \
     location / { \
         try_files $uri $uri/ /index.html; \
-    }; \
+    } \
     location /agent { \
         proxy_pass http://localhost:8000; \
+        proxy_http_version 1.1; \
         proxy_set_header Host $host; \
         proxy_set_header X-Real-IP $remote_addr; \
-    }; \
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \
+        proxy_set_header X-Forwarded-Proto $scheme; \
+        proxy_pass_header Content-Type; \
+    } \
 }' > /etc/nginx/sites-available/default
 
-CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"] &
-nginx -g 'daemon off;'
+RUN echo '#!/bin/bash\n\
+uv run uvicorn main:app --host 0.0.0.0 --port 8000 &\n\
+nginx -g "daemon off;"\n' > /entrypoint.sh && chmod +x /entrypoint.sh
+
+CMD ["/entrypoint.sh"]
